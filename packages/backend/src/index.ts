@@ -1,57 +1,55 @@
 import express from 'express';
-import http from 'http';
 import cors from 'cors';
-import { ExecutionManager } from './execution/manager';
-import { WebSocketManager } from './websocket/manager';
-import executionRoutes, {
-  setExecutionManager,
-  setWebSocketManager,
-} from './routes/execution';
+import { createServer } from 'http';
+import { config } from 'dotenv';
+import apiRoutes from './routes/index';
+import { WebSocketManager } from './websocket/WebSocketManager';
+import { executionManager } from './execution/manager/ExecutionManager';
+import { logger } from './utils/logger';
 
+// Load environment variables
+config({ path: '.env.local' });
+
+const PORT = process.env.BACKEND_PORT || 3001;
 const app = express();
-const server = http.createServer(app);
-const port = parseInt(process.env.BACKEND_PORT || '3001');
+const server = createServer(app);
 
 // Middleware
-app.use(express.json());
 app.use(cors());
+app.use(express.json({ limit: '1mb' }));
 
-// Initialize managers
-const executionManager = new ExecutionManager();
+// WebSocket setup
 const wsManager = new WebSocketManager(server);
 
-// Set managers for routes
-setExecutionManager(executionManager);
-setWebSocketManager(wsManager);
-
-// Routes
-app.use(executionRoutes);
+// Subscribe execution manager to WebSocket broadcasts
+const subscriptions = new Set<string>();
+const originalExecute = executionManager.execute.bind(executionManager);
+(executionManager as any).execute = async function (sessionId: string, ...args: any[]) {
+  if (!subscriptions.has(sessionId)) {
+    const unsubscribe = executionManager.subscribe(sessionId, (session) => {
+      wsManager.broadcastSessionUpdate(session);
+    });
+    subscriptions.add(sessionId);
+  }
+  return originalExecute(sessionId, ...args);
+};
 
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Error handling middleware
-app.use(
-  (err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
-    console.error('Error:', err);
-    res.status(500).json({
-      error: 'Internal server error',
-      message: process.env.NODE_ENV === 'development' ? err.message : undefined,
-    });
-  }
-);
+// API routes
+app.use('/api', apiRoutes);
 
-server.listen(port, () => {
-  console.log(`✓ Backend server running on http://localhost:${port}`);
-  console.log(`✓ WebSocket available at ws://localhost:${port}/api/ws`);
+// Error handling
+app.use((err: any, req: any, res: any, _next: any) => {
+  logger.error(`Unhandled error: ${err.message}`);
+  res.status(500).json({ error: 'Internal server error' });
 });
 
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received, shutting down...');
-  server.close(() => {
-    console.log('Server closed');
-    process.exit(0);
-  });
+// Start server
+server.listen(PORT, () => {
+  logger.info(`Backend server running on http://localhost:${PORT}`);
+  logger.info(`WebSocket server running on ws://localhost:${PORT}`);
 });

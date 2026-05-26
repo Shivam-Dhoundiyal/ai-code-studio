@@ -9,37 +9,25 @@ export interface ExecutionLog {
 export interface ExecutionSession {
   id: string;
   code: string;
+  prompt?: string;
   status: ExecutionStatus;
   logs: ExecutionLog[];
-  error: string | null;
-  result: string | null;
-  startTime: number | null;
-  endTime: number | null;
-  executionTime: number | null;
-  createdAt: number;
+  error?: string;
+  result?: unknown;
+  startTime: number;
+  endTime?: number;
+  executionTime?: number;
 }
 
 export interface ExecutionRequest {
   code: string;
+  timeout?: number;
 }
 
 export interface ExecutionResult {
   success: boolean;
   logs: ExecutionLog[];
   error: string | null;
-  result: string | null;
   executionTime: number;
   code: string;
-}
-
-export interface WorkerMessage {
-  type: 'start' | 'log' | 'error' | 'completed';
-  timestamp: number;
-  data?: {
-    message?: string;
-    logType?: 'log' | 'error' | 'warn';
-    result?: string;
-    executionTime?: number;
-    error?: string;
-  };
 }

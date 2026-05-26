@@ -6,10 +6,8 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "type-check": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "type-check": "tsc --noEmit"
   },
-  "dependencies": {},
   "devDependencies": {
     "typescript": "^5.2.0"
   }
